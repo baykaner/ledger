@@ -57,8 +57,8 @@ TYPED_TEST(DepthwiseConv2DTest, set_input_and_evaluate_test)  // Use the class a
   // Evaluate
   fetch::ml::layers::DepthwiseConv2D<TensorType> conv(output_channels, input_channels,
                                                       kernel_height, stride_size);
-  conv.SetInput("Conv2D_Input", input);
-  TensorType output = conv.Evaluate("Conv2D_Conv2D", true);
+  conv.SetInput("DepthwiseConv2D_Input", input);
+  TensorType output = conv.Evaluate(conv.GetOutputName(), true);
 
   // Get ground truth
   auto                                weights = conv.GetWeights();

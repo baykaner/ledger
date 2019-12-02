@@ -43,7 +43,7 @@ enum class ActivationType
 };
 
 template <class T>
-std::string AddActivationNode(ActivationType type, Graph<T> *g, std::string name, std::string input)
+std::string AddActivationNode(ActivationType type, Graph<T> *g, std::string const & name, std::string const & input)
 {
   switch (type)
   {

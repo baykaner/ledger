@@ -51,6 +51,7 @@ public:
                                    TensorType const &   error_signal) override;
   void                    AddInputNode(std::string const &node_name);
   void                    SetOutputNode(std::string const &node_name);
+  std::string             GetOutputName();
 
   std::shared_ptr<OpsSaveableParams>               GetOpSaveableParams() override;
   std::shared_ptr<fetch::ml::ops::Ops<TensorType>> MakeSharedCopy(
@@ -161,6 +162,12 @@ template <typename TensorType>
 void SubGraph<TensorType>::SetOutputNode(std::string const &node_name)
 {
   output_node_name_ = node_name;
+}
+
+template <typename TensorType>
+std::string SubGraph<TensorType>::GetOutputName()
+{
+  return output_node_name_;
 }
 
 /////////////////////////
