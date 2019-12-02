@@ -19,7 +19,7 @@
 #include "dmlf/collective_learning/client_algorithm.hpp"
 #include "dmlf/collective_learning/utilities/mnist_client_utilities.hpp"
 #include "dmlf/collective_learning/utilities/utilities.hpp"
-#include "dmlf/networkers/muddle_learner_networker.hpp"
+#include "dmlf/deprecated/muddle_learner_networker.hpp"
 #include "dmlf/simple_cycling_algorithm.hpp"
 #include "json/document.hpp"
 #include "math/tensor.hpp"
@@ -95,9 +95,9 @@ int main(int argc, char **argv)
   // This example will create muddle networking distributed client with simple classification neural
   // net and learns how to predict hand written digits from MNIST dataset
 
-  if (argc != 3)
+  if (argc < 3)
   {
-    std::cout << "learner_config.json networker_config.json" << std::endl;
+    std::cout << "learner_config.json networker_config.json instance_number" << std::endl;
     return 1;
   }
 
@@ -110,11 +110,20 @@ int main(int argc, char **argv)
   htpptr->Start(8311);
 
   // get the host name
+  int instance_number;
+  if (argc == 4)
+    {
+    instance_number  = std::atoi(argv[3]);
+  std::cout << "Getting instance number from input: "  << instance_number << std::endl;
+    }
+  else
+    {
   char tmp_hostname[HOST_NAME_MAX_LEN];
   gethostname(tmp_hostname, HOST_NAME_MAX_LEN);
   std::string host_name(tmp_hostname);
-  std::cout << "host_name: " << host_name << std::endl;
-  std::uint64_t instance_number = InstanceFromHostname(host_name);
+  std::cout << "Getting instance number from host_name: " << host_name << std::endl;
+ instance_number = InstanceFromHostname(host_name);
+}
 
   // get the config file
   fetch::json::JSONDocument                                doc;
@@ -146,7 +155,7 @@ int main(int argc, char **argv)
 
   // get the network config file
   fetch::json::JSONDocument network_doc;
-  std::ifstream             network_config_file{std::string(argv[2])};
+  std::ifstream             network_config_file{networker_config};
   std::string               text((std::istreambuf_iterator<char>(network_config_file)),
                                  std::istreambuf_iterator<char>());
   network_doc.Parse(text.c_str());
@@ -178,11 +187,11 @@ int main(int argc, char **argv)
   }
 
   // Create networker and assign shuffle algorithm
-  auto networker =
-      std::make_shared<fetch::dmlf::MuddleLearnerNetworker>(network_doc, instance_number);
-  networker->Initialize<fetch::dmlf::Update<TensorType>>();
+  auto networker = std::make_shared<fetch::dmlf::deprecated_MuddleLearnerNetworker>(
+      network_doc, instance_number);
+  networker->Initialize<fetch::dmlf::deprecated_Update<TensorType>>();
   networker->SetShuffleAlgorithm(
-      std::make_shared<fetch::dmlf::SimpleCyclingAlgorithm>(n_clients-1, n_peers));
+      std::make_shared<fetch::dmlf::SimpleCyclingAlgorithm>(networker->GetPeerCount(), n_peers));
 
   // Pause to let muddle get set up
   std::this_thread::sleep_for(std::chrono::seconds(muddle_delay));
