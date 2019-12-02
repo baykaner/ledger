@@ -22,7 +22,6 @@
 #include "dmlf/deprecated/update_interface.hpp"
 #include "muddle/muddle_interface.hpp"
 #include "muddle/rpc/client.hpp"
-#include "muddle/rpc/server.hpp"
 
 namespace fetch {
 namespace dmlf {
@@ -76,14 +75,13 @@ deprecated_MuddleLearnerNetworker::deprecated_MuddleLearnerNetworker(
   std::unordered_set<std::string> initial_peers;
   auto                            config_peers = cloud_config.root()["peers"];
 
-  auto           config_peer_count   = doc.root()["n_clients"].As<math::SizeType>();
-//  auto config_peer_count = config_peers.size();
+  auto config_peer_count = cloud_config.root()["n_clients"].As<math::SizeType>();
+
   for (std::size_t peer_number = 0; peer_number < config_peer_count; peer_number++)
   {
     if (peer_number != instance_number)
     {
       peers_.emplace_back(config_peers[peer_number]["pub"].As<std::string>());
-      peers_uris_.emplace_back(config_peers[peer_number]["uri"].As<std::string>());
     }
   }
 
@@ -102,12 +100,11 @@ deprecated_MuddleLearnerNetworker::deprecated_MuddleLearnerNetworker(
 
   mud_->Start(initial_peers, {port});
 
-  server_ = std::make_shared<Server>(mud_->GetEndpoint(), SERVICE_DMLF, CHANNEL_RPC);
+  server_ = std::make_shared<RpcServer>(mud_->GetEndpoint(), SERVICE_DMLF, CHANNEL_RPC);
   proto_  = std::make_shared<deprecated_MuddleLearnerNetworkerProtocol>(*this);
 
   server_->Add(RPC_DMLF, proto_.get());
-  client_ =
-      std::make_shared<RpcClient>("Client", mud_->GetEndpoint(), SERVICE_DMLF, CHANNEL_RPC);
+  client_ = std::make_shared<RpcClient>("Client", mud_->GetEndpoint(), SERVICE_DMLF, CHANNEL_RPC);
 }
 
 // TOFIX remove return value
@@ -128,8 +125,6 @@ uint64_t deprecated_MuddleLearnerNetworker::RecvBytes(const byte_array::ByteArra
 
 void deprecated_MuddleLearnerNetworker::PushUpdate(deprecated_UpdateInterfacePtr const &update)
 {
-//  std::shared_ptr<RpcClient> client;
-//  client = std::make_shared<RpcClient>("Client", mud_->GetEndpoint(), SERVICE_DMLF, CHANNEL_RPC);
   auto data = update->Serialise();
 
   PromiseList promises;
@@ -140,11 +135,11 @@ void deprecated_MuddleLearnerNetworker::PushUpdate(deprecated_UpdateInterfacePtr
   for (auto const &target_peer_index : txpeers)
   {
     auto peer = peers_.at(target_peer_index);
-    auto tmp =
-        client_->CallSpecificAddress(fetch::byte_array::FromBase64(byte_array::ConstByteArray(peer)),
-                                    RPC_DMLF, MuddleLearnerNetworkerProtocol::RECV_BYTES, data);
+    auto tmp  = client_->CallSpecificAddress(
+        fetch::byte_array::FromBase64(byte_array::ConstByteArray(peer)), RPC_DMLF,
+        deprecated_MuddleLearnerNetworkerProtocol::RECV_BYTES, data);
     FETCH_LOG_INFO(LOGGING_NAME, "Sending targ=", peer, " prom=", tmp->id(),
-        " uri=", peers_uris_.at(target_peer_index));
+                   " index=", target_peer_index);
 
     promises.push_back(tmp);
   }
@@ -165,8 +160,6 @@ void deprecated_MuddleLearnerNetworker::PushUpdate(deprecated_UpdateInterfacePtr
 void deprecated_MuddleLearnerNetworker::PushUpdateType(const std::string &                  type,
                                                        deprecated_UpdateInterfacePtr const &update)
 {
-//  auto client =
-//      std::make_shared<RpcClient>("Client", mud_->GetEndpoint(), SERVICE_DMLF, CHANNEL_RPC);
   auto data = update->Serialise(type);
 
   PromiseList promises;

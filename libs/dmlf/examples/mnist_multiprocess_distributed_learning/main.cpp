@@ -21,16 +21,15 @@
 #include "dmlf/collective_learning/utilities/utilities.hpp"
 #include "dmlf/deprecated/muddle_learner_networker.hpp"
 #include "dmlf/simple_cycling_algorithm.hpp"
+#include "http/json_response.hpp"
+#include "http/server.hpp"
 #include "json/document.hpp"
 #include "math/tensor.hpp"
-#include "http/server.hpp"
-#include "network/management/network_manager.hpp"
-#include "http/json_response.hpp"
 #include "muddle/muddle_status.hpp"
+#include "network/management/network_manager.hpp"
 
 #include <algorithm>
 #include <iostream>
-#include <limits.h>
 #include <string>
 #include <thread>
 #include <unistd.h>
@@ -84,7 +83,6 @@ public:
 
           return fetch::http::CreateJsonResponse(fetch::muddle::GetStatusSummary(network_name));
         });
-
   }
 };
 
@@ -104,26 +102,26 @@ int main(int argc, char **argv)
   // set up muddle https server
   auto netm = std::make_shared<fetch::network::NetworkManager>("netman", 1);
   netm->Start();
-  auto htpptr = std::make_shared<fetch::http::HTTPServer>(*netm);
+  auto htpptr  = std::make_shared<fetch::http::HTTPServer>(*netm);
   auto mudstat = std::make_shared<MuddleStatusModule>();
   htpptr->AddModule(*mudstat);
   htpptr->Start(8311);
 
   // get the host name
-  int instance_number;
+  std::uint64_t instance_number;
   if (argc == 4)
-    {
-    instance_number  = std::atoi(argv[3]);
-  std::cout << "Getting instance number from input: "  << instance_number << std::endl;
-    }
+  {
+    instance_number = static_cast<uint64_t>(std::atoi(argv[3]));
+    std::cout << "Getting instance number from input: " << instance_number << std::endl;
+  }
   else
-    {
-  char tmp_hostname[HOST_NAME_MAX_LEN];
-  gethostname(tmp_hostname, HOST_NAME_MAX_LEN);
-  std::string host_name(tmp_hostname);
-  std::cout << "Getting instance number from host_name: " << host_name << std::endl;
- instance_number = InstanceFromHostname(host_name);
-}
+  {
+    char tmp_hostname[HOST_NAME_MAX_LEN];
+    gethostname(tmp_hostname, HOST_NAME_MAX_LEN);
+    std::string host_name(tmp_hostname);
+    std::cout << "Getting instance number from host_name: " << host_name << std::endl;
+    instance_number = InstanceFromHostname(host_name);
+  }
 
   // get the config file
   fetch::json::JSONDocument                                doc;
@@ -135,7 +133,7 @@ int main(int argc, char **argv)
   auto     labels_file    = doc["labels"].As<std::string>();
   auto     n_rounds       = doc["n_rounds"].As<SizeType>();
   auto     n_peers        = doc["n_peers"].As<SizeType>();
-  auto n_clients        = doc["n_clients"].As<SizeType>();
+  auto     n_clients      = doc["n_clients"].As<SizeType>();
   auto     test_set_ratio = doc["test_set_ratio"].As<float>();
   SizeType start_time     = 0;
   if (!doc["start_time"].IsUndefined())
@@ -155,7 +153,7 @@ int main(int argc, char **argv)
 
   // get the network config file
   fetch::json::JSONDocument network_doc;
-  std::ifstream             network_config_file{networker_config};
+  std::ifstream             network_config_file{argv[2]};
   std::string               text((std::istreambuf_iterator<char>(network_config_file)),
                                  std::istreambuf_iterator<char>());
   network_doc.Parse(text.c_str());

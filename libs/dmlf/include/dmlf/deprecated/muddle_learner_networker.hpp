@@ -100,15 +100,14 @@ protected:
     explicit deprecated_MuddleLearnerNetworkerProtocol(deprecated_MuddleLearnerNetworker &sample);
   };
 
-  std::shared_ptr<NetworkManager>                 netm_;
-  MuddlePtr                                       mud_;
-  std::shared_ptr<RpcServer>                         server_;
+  std::shared_ptr<NetworkManager>                            netm_;
+  MuddlePtr                                                  mud_;
+  std::shared_ptr<RpcServer>                                 server_;
   std::shared_ptr<deprecated_MuddleLearnerNetworkerProtocol> proto_;
-  std::shared_ptr<RpcClient> client_;
+  std::shared_ptr<RpcClient>                                 client_;
 
   mutable Mutex mutex_;
   Peers         peers_;
-  std::vector<std::string> peers_uris_;
 
   // TOFIX
   MuddleChannel channel_tmp_;
