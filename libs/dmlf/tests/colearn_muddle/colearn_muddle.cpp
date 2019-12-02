@@ -24,6 +24,8 @@
 #include "crypto/ecdsa.hpp"
 #include "dmlf/colearn/muddle_learner_networker_impl.hpp"
 #include "dmlf/colearn/update_store.hpp"
+#include "dmlf/collective_learning/utilities/typed_update_adaptor.hpp"
+#include "dmlf/simple_cycling_algorithm.hpp"
 #include "math/matrix_operations.hpp"
 #include "math/tensor.hpp"
 #include "muddle/muddle_interface.hpp"
@@ -39,19 +41,21 @@ namespace {
 using DataType   = fetch::fixed_point::FixedPoint<32, 32>;
 using TensorType = fetch::math::Tensor<DataType>;
 
-using LNBase  = fetch::dmlf::AbstractLearnerNetworker;
-using LN      = fetch::dmlf::colearn::MuddleLearnerNetworkerImpl;
-using LNBaseP = std::shared_ptr<LNBase>;
-using LNP     = std::shared_ptr<LN>;
-using NetMan  = fetch::network::NetworkManager;
-using NetManP = std::shared_ptr<NetMan>;
+using LNBase   = fetch::dmlf::colearn::AbstractMessageController;
+using LNBaseT  = fetch::dmlf::collective_learning::utilities::TypedUpdateAdaptor;
+using LN       = fetch::dmlf::colearn::MuddleLearnerNetworkerImpl;
+using LNBaseP  = std::shared_ptr<LNBase>;
+using LNBaseTP = std::shared_ptr<LNBaseT>;
+using LNP      = std::shared_ptr<LN>;
+using NetMan   = fetch::network::NetworkManager;
+using NetManP  = std::shared_ptr<NetMan>;
 
 using MuddlePtr      = fetch::muddle::MuddlePtr;
 using CertificatePtr = fetch::muddle::ProverPtr;
 using Store          = fetch::dmlf::colearn::UpdateStore;
 using StorePtr       = std::shared_ptr<Store>;
 
-using UpdateTypeForTesting = fetch::dmlf::Update<TensorType>;
+using UpdateTypeForTesting = fetch::dmlf::deprecated_Update<TensorType>;
 using UpdatePayload        = UpdateTypeForTesting::Payload;
 
 // char const *SERVER_PRIV = "BEb+rF65Dg+59XQyKcu9HLl5tJc9wAZDX+V0ud07iDQ=";
@@ -68,6 +72,7 @@ class LearnerTypedUpdates
 public:
   LNP       actual;
   LNBaseP   interface;
+  LNBaseTP  interface_typed;
   NetManP   netm_;
   MuddlePtr mud_;
   StorePtr  store_;
@@ -82,10 +87,11 @@ public:
       r += std::to_string(remote);
     }
 
-    actual    = std::make_shared<LN>(priv, port, r);
-    interface = actual;
-    interface->RegisterUpdateType<UpdateTypeForTesting>("update");
-    interface->RegisterUpdateType<fetch::dmlf::Update<std::string>>("vocab");
+    actual          = std::make_shared<LN>(priv, port, r);
+    interface       = actual;
+    interface_typed = std::make_shared<LNBaseT>(interface);
+    interface_typed->RegisterUpdateType<UpdateTypeForTesting>("update");
+    interface_typed->RegisterUpdateType<fetch::dmlf::deprecated_Update<std::string>>("vocab");
   }
 
   void PretendToLearn()
@@ -96,9 +102,9 @@ public:
     t.Fill(DataType(sequence_number++));
     auto r = std::vector<TensorType>();
     r.push_back(t);
-    interface->PushUpdateType("update", std::make_shared<UpdateTypeForTesting>(r));
-    interface->PushUpdateType("vocab", std::make_shared<fetch::dmlf::Update<std::string>>(
-                                           std::vector<std::string>{"cat", "dog"}));
+    interface_typed->PushUpdate(std::make_shared<UpdateTypeForTesting>(r));
+    interface_typed->PushUpdate(std::make_shared<fetch::dmlf::deprecated_Update<std::string>>(
+        std::vector<std::string>{"cat", "dog"}));
   }
 };
 
@@ -110,42 +116,42 @@ public:
     std::shared_ptr<LearnerTypedUpdates> instance;
     unsigned short int                   port;
     LN::Address                          pub;
+    std::string                          pubstr;
   };
 
   using Insts = std::vector<Inst>;
 
-  const unsigned int PEERS = 3;
-
   Insts instances;
 
-  void SetUp() override
+  void CreateServers(unsigned int peercount = 3)
   {
     srand(static_cast<unsigned int>(time(nullptr)));
     auto base_port = static_cast<unsigned short int>(rand() % 10000 + 10000);
 
-    for (unsigned int i = 0; i < PEERS; i++)
+    for (unsigned int i = 0; i < peercount; i++)
     {
       Inst inst;
       inst.port     = static_cast<unsigned short int>(base_port + i);
       inst.instance = std::make_shared<LearnerTypedUpdates>("", inst.port, (i > 0) ? base_port : 0);
       inst.pub      = inst.instance->actual->GetAddress();
+      inst.pubstr   = inst.instance->actual->GetAddressAsString();
       instances.push_back(inst);
     }
   }
 };
 
-TEST_F(MuddleTypedUpdatesTests, singleThreadedVersion)
+TEST_F(MuddleTypedUpdatesTests, correctMessagesArriveBCast)
 {
+  CreateServers(2);
   std::this_thread::sleep_for(std::chrono::milliseconds(200));
 
   instances[0].instance->PretendToLearn();
 
   std::this_thread::sleep_for(std::chrono::milliseconds(200));
   EXPECT_GT(instances[1].instance->actual->GetUpdateCount(), 0);
-
   try
   {
-    instances[1].instance->actual->GetUpdate("algo1", "vocab");
+    instances[1].instance->actual->GetUpdate("algo0", "vocab");
   }
   catch (std::exception const &e)
   {
@@ -154,7 +160,7 @@ TEST_F(MuddleTypedUpdatesTests, singleThreadedVersion)
 
   try
   {
-    instances[1].instance->actual->GetUpdate("algo1", "weights");
+    instances[1].instance->actual->GetUpdate("algo0", "weights");
     EXPECT_EQ("weights", "should not be present");
   }
   catch (std::exception const &e)
@@ -164,13 +170,47 @@ TEST_F(MuddleTypedUpdatesTests, singleThreadedVersion)
 
   try
   {
-    auto upd = instances[1].instance->actual->GetUpdate("algo1", "vocab");
+    auto upd = instances[1].instance->actual->GetUpdate("algo0", "vocab");
     EXPECT_EQ("vocab", "should not be present (already emptied)");
   }
   catch (std::exception const &e)
   {
     // get should throw, because vocab Q is empty.
   }
+}
+
+TEST_F(MuddleTypedUpdatesTests, correctMessagesArriveShuffle)
+{
+  CreateServers(6);
+  std::this_thread::sleep_for(std::chrono::milliseconds(200));
+
+  for (unsigned int i = 0; i < instances.size(); i++)
+  {
+    for (unsigned int j = 0; j < instances.size(); j++)
+    {
+      if (i != j)
+      {
+        instances[i].instance->actual->AddPeers({instances[j].pubstr});
+      }
+    }
+  }
+
+  auto cycle = std::make_shared<fetch::dmlf::SimpleCyclingAlgorithm>(instances.size() - 1, 2);
+  for (auto &inst : instances)
+  {
+    inst.instance->actual->SetShuffleAlgorithm(cycle);
+  }
+
+  instances[0].instance->PretendToLearn();
+
+  std::this_thread::sleep_for(std::chrono::milliseconds(700));
+
+  EXPECT_EQ(instances[0].instance->actual->GetUpdateCount(), 0);
+  EXPECT_EQ(instances[1].instance->actual->GetUpdateCount(), 1);
+  EXPECT_EQ(instances[2].instance->actual->GetUpdateCount(), 1);
+  EXPECT_EQ(instances[3].instance->actual->GetUpdateCount(), 1);
+  EXPECT_EQ(instances[4].instance->actual->GetUpdateCount(), 1);
+  EXPECT_EQ(instances[5].instance->actual->GetUpdateCount(), 0);
 }
 
 }  // namespace
