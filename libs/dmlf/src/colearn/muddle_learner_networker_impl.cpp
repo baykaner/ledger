@@ -218,6 +218,7 @@ void MuddleLearnerNetworkerImpl::PushUpdateBytes(UpdateType const &type_name, By
   auto random_factor = randomiser_.GetNew();
   if (alg_)
   {
+    FETCH_LOG_INFO(LOGGING_NAME, "PushUpdateBytes using shuffler ");
     // use the shuffler
     auto next_ones = alg_->GetNextOutputs();
 
@@ -236,6 +237,7 @@ void MuddleLearnerNetworkerImpl::PushUpdateBytes(UpdateType const &type_name, By
   {
     serializers::MsgPackSerializer buf;
     buf << type_name << update << broadcast_proportion_ << random_factor;
+    FETCH_LOG_INFO(LOGGING_NAME, "PushUpdateBytes, broadcasting: ", broadcast_proportion_);
     mud_->GetEndpoint().Broadcast(SERVICE_DMLF, CHANNEL_COLEARN_BROADCAST, buf.data());
   }
 }

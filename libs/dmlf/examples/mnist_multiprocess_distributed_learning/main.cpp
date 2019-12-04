@@ -87,6 +87,15 @@ public:
   }
 };
 
+void sleep_forever()
+{
+  while (true) {
+    std::cout << "Sleeping" << std::endl;
+    std::this_thread::sleep_for(std::chrono::seconds(30));
+  }
+}
+
+
 int main(int argc, char **argv)
 {
   static constexpr std::size_t HOST_NAME_MAX_LEN = 250;
@@ -171,11 +180,13 @@ int main(int argc, char **argv)
   {
     std::cout << "Error: instance number " << instance_number << " greater than number of clients "
               << n_clients << std::endl;
+    sleep_forever();
   }
   else if (n_clients > config_peer_count)
   {
     std::cout << "Config only provided for " << config_peer_count << " but " << n_clients
               << " specified in config.json." << std::endl;
+    sleep_forever();
   }
   else
   {
@@ -241,12 +252,9 @@ int main(int argc, char **argv)
 
     int res = system(("gsutil cp /app/results/* " + gcloud_folder).c_str());
     std::cout << "system() result: " << res << std::endl;
+
+    sleep_forever();
   }
 
-  while (true)
-  {
-    std::cout << "Sleeping" << std::endl;
-    std::this_thread::sleep_for(std::chrono::seconds(30));
-  }
   return 0;
 }
