@@ -75,7 +75,14 @@ deprecated_MuddleLearnerNetworker::deprecated_MuddleLearnerNetworker(
   std::unordered_set<std::string> initial_peers;
   auto                            config_peers = cloud_config.root()["peers"];
 
-  auto config_peer_count = cloud_config.root()["n_clients"].As<math::SizeType>();
+  auto config_peer_count = config_peers.size();
+
+  if (instance_number > config_peer_count)
+  {
+    throw std::runtime_error("Instance number " + std::to_string(instance_number) +
+                             " greater than number of clients " +
+                             std::to_string(config_peer_count));
+  }
 
   for (std::size_t peer_number = 0; peer_number < config_peer_count; peer_number++)
   {

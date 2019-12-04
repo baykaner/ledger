@@ -47,7 +47,7 @@ class CollectiveLearningClient
 
 public:
   CollectiveLearningClient(std::string id, ClientParams<DataType> const &client_params,
-                           std::shared_ptr<dmlf::deprecated_AbstractLearnerNetworker> networker_ptr,
+                           std::shared_ptr<dmlf::colearn::AbstractMessageController> networker_ptr,
                            std::shared_ptr<std::mutex> console_mutex_ptr,
                            bool                        build_algorithms = true);
   virtual ~CollectiveLearningClient() = default;
@@ -72,7 +72,7 @@ protected:
 template <class TensorType>
 CollectiveLearningClient<TensorType>::CollectiveLearningClient(
     std::string id, ClientParams<DataType> const &client_params,
-    std::shared_ptr<dmlf::deprecated_AbstractLearnerNetworker> networker_ptr,
+    std::shared_ptr<dmlf::colearn::AbstractMessageController> networker_ptr,
     std::shared_ptr<std::mutex> console_mutex_ptr, bool build_algorithms)
   : id_(std::move(id))
 {

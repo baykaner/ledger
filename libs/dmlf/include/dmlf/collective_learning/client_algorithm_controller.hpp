@@ -19,6 +19,7 @@
 
 #include <utility>
 
+#include "dmlf/colearn/abstract_message_controller.hpp"
 #include "dmlf/deprecated/abstract_learner_networker.hpp"
 #include "dmlf/deprecated/update.hpp"
 
@@ -30,7 +31,7 @@ template <class TensorType>
 class ClientAlgorithmController
 {
   using UpdateType                    = fetch::dmlf::deprecated_Update<TensorType>;
-  using MessageControllerInterfacePtr = std::shared_ptr<dmlf::deprecated_AbstractLearnerNetworker>;
+  using MessageControllerInterfacePtr = std::shared_ptr<dmlf::colearn::AbstractMessageController>;
 
 public:
   explicit ClientAlgorithmController(MessageControllerInterfacePtr mci_ptr);
@@ -65,7 +66,7 @@ void ClientAlgorithmController<TensorType>::PushUpdate(
     std::shared_ptr<ClientAlgorithmController::UpdateType> update)
 {
   FETCH_LOCK(algorithm_controller_mutex);
-  mci_ptr_->PushUpdate(update);
+  mci_ptr_->PushUpdate(update->Serialise(), "mnist", "gradients");
 }
 
 /**
@@ -76,7 +77,7 @@ template <typename TensorType>
 std::size_t ClientAlgorithmController<TensorType>::UpdateCount()
 {
   FETCH_LOCK(algorithm_controller_mutex);
-  return mci_ptr_->GetUpdateCount();
+  return mci_ptr_->GetUpdateCount("mnist", "gradients");
 }
 
 /**
@@ -87,7 +88,11 @@ template <typename UpdateType>
 std::shared_ptr<UpdateType> ClientAlgorithmController<TensorType>::GetUpdate()
 {
   FETCH_LOCK(algorithm_controller_mutex);
-  return mci_ptr_->GetUpdate<UpdateType>();
+  colearn::AbstractMessageController::ConstUpdatePtr the_colearn_update;
+  the_colearn_update = mci_ptr_->GetUpdate("mnist", "gradients");
+  auto result        = std::make_shared<UpdateType>();
+  result->DeSerialise(the_colearn_update->data());
+  return result;
 }
 
 }  // namespace collective_learning

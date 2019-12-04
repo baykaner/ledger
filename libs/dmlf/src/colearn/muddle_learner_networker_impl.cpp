@@ -152,21 +152,20 @@ void MuddleLearnerNetworkerImpl::Setup(std::string const &priv, unsigned short i
 MuddleLearnerNetworkerImpl::MuddleLearnerNetworkerImpl(fetch::json::JSONDocument &cloud_config,
                                                        std::size_t                instance_number)
 {
-  auto my_config    = cloud_config.root()["peers"][instance_number];
-  auto self_uri     = Uri(my_config["uri"].As<std::string>());
-  auto port         = self_uri.GetTcpPeer().port();
-  auto privkey      = my_config["key"].As<std::string>();
-  auto config_peers = cloud_config.root()["peers"];
+  variant::Variant &config_peers = cloud_config["peers"];
+  variant::Variant &my_config    = config_peers[instance_number];
+  auto              self_uri     = Uri(my_config["uri"].As<std::string>());
+  uint16_t          port         = self_uri.GetTcpPeer().port();
+  auto              privkey      = my_config["key"].As<std::string>();
 
-  auto config_peer_count = config_peers.size();
-
+  size_t                          config_peer_count = config_peers.size();
   std::unordered_set<std::string> remotes;
 
   if (config_peer_count <= INITIAL_PEERS_COUNT)
   {
     if (instance_number != 0)
     {
-      remotes.insert(cloud_config.root()["peers"][0]["uri"].As<std::string>());
+      remotes.insert(config_peers[0]["uri"].As<std::string>());
     }
   }
   else

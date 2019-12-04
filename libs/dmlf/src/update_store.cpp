@@ -16,11 +16,12 @@
 //
 //------------------------------------------------------------------------------
 
+#include "dmlf/colearn/colearn_uri.hpp"
+#include "dmlf/colearn/update_store.hpp"
+
 #include <cmath>
 #include <numeric>
 #include <stdexcept>
-
-#include "dmlf/colearn/update_store.hpp"
 
 namespace fetch {
 namespace dmlf {

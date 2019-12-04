@@ -16,10 +16,10 @@
 //
 //------------------------------------------------------------------------------
 
+#include "dmlf/colearn/muddle_learner_networker_impl.hpp"
 #include "dmlf/collective_learning/client_algorithm.hpp"
 #include "dmlf/collective_learning/utilities/mnist_client_utilities.hpp"
 #include "dmlf/collective_learning/utilities/utilities.hpp"
-#include "dmlf/deprecated/muddle_learner_networker.hpp"
 #include "dmlf/simple_cycling_algorithm.hpp"
 #include "http/json_response.hpp"
 #include "http/server.hpp"
@@ -40,7 +40,8 @@ using namespace fetch::ml::ops;
 using namespace fetch::ml::layers;
 using namespace fetch::dmlf::collective_learning;
 
-using DataType         = fetch::fixed_point::FixedPoint<32, 32>;
+// using DataType         = fetch::fixed_point::FixedPoint<32, 32>;
+using DataType         = float;
 using TensorType       = fetch::math::Tensor<DataType>;
 using VectorTensorType = std::vector<TensorType>;
 using SizeType         = fetch::math::SizeType;
@@ -88,7 +89,7 @@ public:
 
 int main(int argc, char **argv)
 {
-  static constexpr std::size_t HOST_NAME_MAX_LEN = 12;
+  static constexpr std::size_t HOST_NAME_MAX_LEN = 250;
 
   // This example will create muddle networking distributed client with simple classification neural
   // net and learns how to predict hand written digits from MNIST dataset
@@ -98,14 +99,6 @@ int main(int argc, char **argv)
     std::cout << "learner_config.json networker_config.json instance_number" << std::endl;
     return 1;
   }
-
-  // set up muddle https server
-  auto netm = std::make_shared<fetch::network::NetworkManager>("netman", 1);
-  netm->Start();
-  auto htpptr  = std::make_shared<fetch::http::HTTPServer>(*netm);
-  auto mudstat = std::make_shared<MuddleStatusModule>();
-  htpptr->AddModule(*mudstat);
-  htpptr->Start(8311);
 
   // get the host name
   std::uint64_t instance_number;
@@ -150,6 +143,19 @@ int main(int argc, char **argv)
   {
     gcloud_folder = doc["gcloud_folder"].As<std::string>();
   }
+  uint16_t monitoring_port = 8311;
+  if (!doc["monitoring_port"].IsUndefined())
+  {
+    monitoring_port = doc["monitoring_port"].As<uint16_t>();
+  }
+
+  // set up muddle https server
+  auto netm = std::make_shared<fetch::network::NetworkManager>("netman", 1);
+  netm->Start();
+  auto htpptr  = std::make_shared<fetch::http::HTTPServer>(*netm);
+  auto mudstat = std::make_shared<MuddleStatusModule>();
+  htpptr->AddModule(*mudstat);
+  htpptr->Start(monitoring_port);
 
   // get the network config file
   fetch::json::JSONDocument network_doc;
@@ -157,61 +163,85 @@ int main(int argc, char **argv)
   std::string               text((std::istreambuf_iterator<char>(network_config_file)),
                                  std::istreambuf_iterator<char>());
   network_doc.Parse(text.c_str());
-  network_doc["n_clients"] = n_clients;  // bit of a hack!
 
-  /**
-   * Prepare environment
-   */
-  std::cout << "FETCH Distributed MNIST Demo" << std::endl;
+  size_t config_peer_count = network_doc["peers"].size();
+  std::cout << "config_peer_count: " << config_peer_count << std::endl;
 
-  // Create console mutex
-  std::shared_ptr<std::mutex> console_mutex_ptr = std::make_shared<std::mutex>();
-
-  // Pause until start time
-  std::cout << "start_time: " << start_time << std::endl;
-  if (start_time != 0)
+  if (instance_number >= n_clients)
   {
-    SizeType now = static_cast<SizeType>(std::time(nullptr));
-    if (now < start_time)
-    {
-      SizeType diff = start_time - now;
-      std::cout << "Waiting for " << diff << " seconds delay before starting..." << std::endl;
-      std::this_thread::sleep_for(std::chrono::seconds(diff));
-    }
-    else
-    {
-      std::cout << "Start time is in the past" << std::endl;
-    }
+    std::cout << "Error: instance number " << instance_number << " greater than number of clients "
+              << n_clients << std::endl;
   }
-
-  // Create networker and assign shuffle algorithm
-  auto networker = std::make_shared<fetch::dmlf::deprecated_MuddleLearnerNetworker>(
-      network_doc, instance_number);
-  networker->Initialize<fetch::dmlf::deprecated_Update<TensorType>>();
-  networker->SetShuffleAlgorithm(
-      std::make_shared<fetch::dmlf::SimpleCyclingAlgorithm>(networker->GetPeerCount(), n_peers));
-
-  // Pause to let muddle get set up
-  std::this_thread::sleep_for(std::chrono::seconds(muddle_delay));
-
-  // Create learning client
-  auto client = fetch::dmlf::collective_learning::utilities::MakeMNISTClient<TensorType>(
-      std::to_string(instance_number), client_params, data_file, labels_file, test_set_ratio,
-      networker, console_mutex_ptr);
-
-  /**
-   * Main loop
-   */
-
-  for (SizeType it{0}; it < n_rounds; ++it)
+  else if (n_clients > config_peer_count)
   {
-    // Start all clients
-    std::cout << "================= ROUND : " << it << " =================" << std::endl;
-
-    client->RunAlgorithms();
+    std::cout << "Config only provided for " << config_peer_count << " but " << n_clients
+              << " specified in config.json." << std::endl;
   }
-  int res = system(("gsutil cp /app/results/* " + gcloud_folder).c_str());
-  std::cout << "system() result: " << res << std::endl;
+  else
+  {
+    network_doc["peers"].ResizeArray(n_clients);
+
+    /**
+     * Prepare environment
+     */
+    std::cout << "FETCH Distributed MNIST Demo" << std::endl;
+
+    // Create console mutex
+    std::shared_ptr<std::mutex> console_mutex_ptr = std::make_shared<std::mutex>();
+
+    // Pause until start time
+    std::cout << "start_time: " << start_time << std::endl;
+    if (start_time != 0)
+    {
+      SizeType now = static_cast<SizeType>(std::time(nullptr));
+      if (now < start_time)
+      {
+        SizeType diff = start_time - now;
+        std::cout << "Waiting for " << diff << " seconds delay before starting..." << std::endl;
+        std::this_thread::sleep_for(std::chrono::seconds(diff));
+      }
+      else
+      {
+        std::cout << "Start time is in the past" << std::endl;
+      }
+    }
+
+    // Create networker and assign shuffle algorithm
+    auto networker = std::make_shared<fetch::dmlf::colearn::MuddleLearnerNetworkerImpl>(
+        network_doc, instance_number);
+    networker->SetShuffleAlgorithm(
+        std::make_shared<fetch::dmlf::SimpleCyclingAlgorithm>(networker->GetPeerCount(), n_peers));
+
+    // Pause to let muddle get set up
+    std::cout << "Waiting for " << muddle_delay << " seconds to let muddle get set up..."
+              << std::endl;
+    std::this_thread::sleep_for(std::chrono::seconds(muddle_delay));
+
+    // Create learning client
+    auto client = fetch::dmlf::collective_learning::utilities::MakeMNISTClient<TensorType>(
+        std::to_string(instance_number), client_params, data_file, labels_file, test_set_ratio,
+        networker, console_mutex_ptr);
+
+    try
+    {
+      /**
+       * Main loop
+       */
+
+      for (SizeType it{0}; it < n_rounds; ++it)
+      {
+        std::cout << "================= ROUND : " << it << " =================" << std::endl;
+        client->RunAlgorithms();
+      }
+    }
+    catch (const std::runtime_error &error)
+    {
+      std::cout << "Caught error: " << error.what() << std::endl;
+    }
+
+    int res = system(("gsutil cp /app/results/* " + gcloud_folder).c_str());
+    std::cout << "system() result: " << res << std::endl;
+  }
 
   while (true)
   {
