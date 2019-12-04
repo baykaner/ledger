@@ -87,10 +87,11 @@ public:
   }
 };
 
-void sleep_forever()
+void sleep_forever(std::function<void(void)> fun = [](){})
 {
   while (true) {
     std::cout << "Sleeping" << std::endl;
+    fun();
     std::this_thread::sleep_for(std::chrono::seconds(30));
   }
 }
@@ -253,7 +254,11 @@ int main(int argc, char **argv)
     int res = system(("gsutil cp /app/results/* " + gcloud_folder).c_str());
     std::cout << "system() result: " << res << std::endl;
 
-    sleep_forever();
+    auto processed = networker->GetUpdateTotalCount();
+
+    sleep_forever([networker, processed](){std::cout << "networker total count: " << networker->GetUpdateTotalCount() <<
+    "/" << networker->GetUpdateTotalCount() - processed
+    << std::endl;});
   }
 
   return 0;

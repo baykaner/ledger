@@ -424,26 +424,27 @@ void ClientAlgorithm<TensorType>::TrainAndApplyUpdates()
   algorithm_controller_->PushUpdate(GetUpdate());
 
   // Sum all gradients provided by algorithm controller
-  while (algorithm_controller_->UpdateCount() > 0)
-  {
-    // get new update from algorithm controller
-    auto new_update = algorithm_controller_->template GetUpdate<UpdateType>();
+  try {
+    while (true) {
+      // get new update from algorithm controller
+      auto new_update = algorithm_controller_->template GetUpdate<UpdateType>();
 
-    // Translate and apply update to model
-    if (new_update->GetUpdatedRows().empty())
-    {
-      AggregateUpdate(new_update->GetGradients());
-    }
-    else
-    {
-      AggregateSparseUpdate(new_update->GetGradients(), TranslateUpdate(new_update));
-    }
+      // Translate and apply update to model
+      if (new_update->GetUpdatedRows().empty()) {
+        AggregateUpdate(new_update->GetGradients());
+      } else {
+        AggregateSparseUpdate(new_update->GetGradients(), TranslateUpdate(new_update));
+      }
 
-    // track number of total updates applied for evaluation
-    updates_applied_this_round_++;
-    update_counter_++;
+      // track number of total updates applied for evaluation
+      updates_applied_this_round_++;
+      update_counter_++;
+    }
   }
-
+  catch (std::runtime_error)
+  {
+    // do nothing; we have reached the end of the updates
+  }
   // apply aggregated local and remote updates
   ApplyUpdates();
 }
