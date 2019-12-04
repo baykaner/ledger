@@ -152,20 +152,29 @@ void MuddleLearnerNetworkerImpl::Setup(std::string const &priv, unsigned short i
 MuddleLearnerNetworkerImpl::MuddleLearnerNetworkerImpl(fetch::json::JSONDocument &cloud_config,
                                                        std::size_t                instance_number)
 {
-  variant::Variant &config_peers = cloud_config["peers"];
-  variant::Variant &my_config    = config_peers[instance_number];
-  auto              self_uri     = Uri(my_config["uri"].As<std::string>());
-  uint16_t          port         = self_uri.GetTcpPeer().port();
-  auto              privkey      = my_config["key"].As<std::string>();
+  auto my_config    = cloud_config.root()["peers"][instance_number];
+  auto self_uri     = Uri(my_config["uri"].As<std::string>());
+  auto port         = self_uri.GetTcpPeer().port();
+  auto privkey      = my_config["key"].As<std::string>();
+  auto config_peers = cloud_config.root()["peers"];
 
-  size_t                          config_peer_count = config_peers.size();
+  auto config_peer_count = config_peers.size();
+
+  for (unsigned int i = 0; i < config_peer_count; i++)
+  {
+    if (i != instance_number)
+    {
+      supplied_peers_.push_back(cloud_config.root()["peers"][i]["pub"].As<std::string>());
+    }
+  }
+
   std::unordered_set<std::string> remotes;
 
   if (config_peer_count <= INITIAL_PEERS_COUNT)
   {
     if (instance_number != 0)
     {
-      remotes.insert(config_peers[0]["uri"].As<std::string>());
+      remotes.insert(cloud_config.root()["peers"][0]["uri"].As<std::string>());
     }
   }
   else
@@ -203,6 +212,11 @@ void MuddleLearnerNetworkerImpl::PushUpdateBytes(UpdateType const &type_name, By
 {
   auto random_factor   = randomiser_.GetNew();
   broadcast_proportion = std::max(0.0, std::min(1.0, broadcast_proportion));
+  if (peers.empty())
+  {
+    FETCH_LOG_WARN(LOGGING_NAME, "PushUpdateBytes(1) got no peers to send to.");
+    return;
+  }
   for (auto const &peer : peers)
   {
     FETCH_LOG_INFO(LOGGING_NAME, "Creating sender for ", type_name, " to target ",
@@ -223,6 +237,11 @@ void MuddleLearnerNetworkerImpl::PushUpdateBytes(UpdateType const &type_name, By
     auto next_ones = alg_->GetNextOutputs();
 
     Peers peers;
+    if (next_ones.empty())
+    {
+      FETCH_LOG_WARN(LOGGING_NAME, "PushUpdateBytes(2) got no peers from alg to send to.");
+      return;
+    }
     for (auto const &next_one : next_ones)
     {
       auto id      = supplied_peers_[next_one];
