@@ -502,7 +502,9 @@ static void SigmoidArguments(benchmark::internal::Benchmark *b)
 }
 
 BENCHMARK_TEMPLATE(BM_SigmoidForward, float)->Apply(SigmoidArguments)->Unit(benchmark::kNanosecond);
-BENCHMARK_TEMPLATE(BM_SigmoidForward, double)->Apply(SigmoidArguments)->Unit(benchmark::kNanosecond);
+BENCHMARK_TEMPLATE(BM_SigmoidForward, double)
+    ->Apply(SigmoidArguments)
+    ->Unit(benchmark::kNanosecond);
 BENCHMARK_TEMPLATE(BM_SigmoidForward, fetch::fixed_point::fp32_t)
     ->Apply(SigmoidArguments)
     ->Unit(benchmark::kNanosecond);
@@ -516,7 +518,7 @@ BENCHMARK_TEMPLATE(BM_SigmoidForward, fetch::fixed_point::fp128_t)
 template <class T>
 void BM_SigmoidBackward(benchmark::State &state)
 {
-  using TensorType  = typename fetch::math::Tensor<T>;
+  using TensorType = typename fetch::math::Tensor<T>;
 
   fetch::ml::utilities::BM_Tensor_config<::benchmark::State> config{state};
 
@@ -540,8 +542,12 @@ void BM_SigmoidBackward(benchmark::State &state)
   }
 }
 
-BENCHMARK_TEMPLATE(BM_SigmoidBackward, float)->Apply(SigmoidArguments)->Unit(benchmark::kNanosecond);
-BENCHMARK_TEMPLATE(BM_SigmoidBackward, double)->Apply(SigmoidArguments)->Unit(benchmark::kNanosecond);
+BENCHMARK_TEMPLATE(BM_SigmoidBackward, float)
+    ->Apply(SigmoidArguments)
+    ->Unit(benchmark::kNanosecond);
+BENCHMARK_TEMPLATE(BM_SigmoidBackward, double)
+    ->Apply(SigmoidArguments)
+    ->Unit(benchmark::kNanosecond);
 BENCHMARK_TEMPLATE(BM_SigmoidBackward, fetch::fixed_point::fp32_t)
     ->Apply(SigmoidArguments)
     ->Unit(benchmark::kNanosecond);
